@@ -1,7 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import userRoutes from "./routes/user.js"; // chỉ user
+import userRoutes from "./routes/user.js"; // chứa route /me
+
 
 dotenv.config();
 const app = express();
@@ -13,7 +14,7 @@ app.use(express.json());
 app.get("/", (_req, res) => res.json({ ok: true }));
 
 // chỉ đăng ký
-app.use("/api/user", userRoutes);
+app.use("/api/user", userRoutes);   // /me
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { authMiddleware } from "../middleware/authMiddleware.js";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -65,6 +66,37 @@ router.post("/login", async (req, res) => {
     res.status(500).json({ error: "Lỗi server" });
   }
 });
+// ===== Lấy profile hiện tại =====
+router.get("/me", async (req, res) => {
+  try {
+  const authHeader = req.headers.authorization; // Lấy token từ header
+   if (!authHeader)
+return res.status(401).json({ error: "Thiếu token Authorization" });
+
+   const token = authHeader.split(" ")[1]; // "Bearer <token>"
+    if (!token) return res.status(401).json({ error: "Token không hợp lệ" });
+
+    let decoded;
+  try {
+     decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+    return res.status(401).json({ error: "Token hết hạn hoặc không hợp lệ" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, email: true, name: true, createdAt: true },
+    });
+
+    if (!user) return res.status(404).json({ error: "Không tìm thấy user" });
+
+    res.json({ user });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Lỗi server" });
+  }
+});
+
 
 
 export default router;
