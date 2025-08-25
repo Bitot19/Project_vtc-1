@@ -14,4 +14,16 @@ model User {
   name      String?
   createdAt DateTime @default(now())
 }
+model Product {
+  id           Int      @id @default(autoincrement())
+  category     String
+  name         String
+  description  String?
+  image        String?   // lưu URL hoặc tên file hình ảnh
+  size         String?   // ví dụ: "30x40 cm"
+  quantity     Int       // tồn kho
+  price        Float
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
 
