@@ -1,0 +1,21 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql_capstone_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 02162002
+      MYSQL_DATABASE: mysql_capstone
+      MYSQL_USER: capstone_user
+      MYSQL_PASSWORD: 02162002
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+
+  adminer:
+    image: adminer
+    container_name: mysql_capstone_adminer
+    restart: always
+    ports:
+      - "8080:8080"
