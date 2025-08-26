@@ -6,32 +6,72 @@ datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
-
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   password  String
   name      String?
+  role      Role     @default(USER)   // 👈 thay vì isAdmin
   createdAt DateTime @default(now())
+
+  orders Order[]
 }
 
+enum Role {
+  USER
+  STAFF
+  ADMIN
+}
+
+
+
 model Category {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  createdAt DateTime  @default(now())
-  products  Product[] // 1 danh mục có nhiều sản phẩm
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  products Product[] // 1 danh mục có nhiều sản phẩm
 }
 
 model Product {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   name        String
   description String?
-  image       String?   // lưu URL hoặc tên file hình ảnh
-  size        String?   // ví dụ: "30x40 cm"
-  quantity    Int       // tồn kho
+  image       String?
+  size        String?
+  quantity    Int
   price       Float
   categoryId  Int
-  category    Category  @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  category    Category @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orderItems OrderItem[] // 👈 cần field này để đối xứng với OrderItem.product
+}
+
+model Order {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id]) // đối xứng với User.orders
+  status     String   @default("PENDING")
+  totalPrice Float
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customerName String
+  phone        String
+  address      String
+  note         String?
+
+  orderItems OrderItem[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id]) // đối xứng với Order.orderItems
+  productId Int
+  product   Product @relation(fields: [productId], references: [id]) // đối xứng với Product.orderItems
+  quantity  Int
+  price     Float
 }
