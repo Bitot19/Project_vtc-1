@@ -42,13 +42,24 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email và mật khẩu là bắt buộc" });
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email và mật khẩu là bắt buộc" });
+    }
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(400).json({ error: "Sai email hoặc mật khẩu" });
+    if (!user) {
+      return res.status(400).json({ error: "Sai email hoặc mật khẩu" });
+    }
+
+    // ✅ Kiểm tra tài khoản có đang hoạt động không
+    if (!user.isActive) {
+      return res.status(403).json({ error: "Tài khoản của bạn đã bị vô hiệu hóa liên hệ admin để được giải quyết" });
+    }
 
     const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) return res.status(400).json({ error: "Sai email hoặc mật khẩu" });
+    if (!validPassword) {
+      return res.status(400).json({ error: "Sai email hoặc mật khẩu" });
+    }
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
@@ -56,7 +67,16 @@ router.post("/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({ message: "Đăng nhập thành công", token });
+    res.json({
+      message: "Đăng nhập thành công",
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Lỗi server" });
@@ -225,6 +245,25 @@ router.put("/:id", authMiddleware, adminMiddleware, async (req, res) => {
     res.status(500).json({ error: "Lỗi server" });
   }
 });
+// ===== Khóa / mở khóa tài khoản (admin) =====
+router.put("/:id/lock", authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body; // true = mở, false = khóa
+
+    const updatedUser = await prisma.user.update({
+      where: { id: parseInt(id) },
+      data: { isActive },
+      select: { id: true, email: true, name: true, role: true, isActive: true },
+    });
+
+    res.json({ message: isActive ? "Đã mở khóa tài khoản" : "Đã khóa tài khoản", user: updatedUser });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Lỗi server" });
+  }
+});
+
 
 export default router;
 

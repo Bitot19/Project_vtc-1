@@ -7,21 +7,40 @@ import { adminMiddleware } from "../middleware/adminMiddleware.js";
 const router = Router();
 const prisma = new PrismaClient();
 
-/**
- * GET /bestsellers
- * Lấy tất cả sản phẩm bán chạy
- */
+
+// GET /api/bestsellers?page=1&limit=10
 router.get("/", async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;   // mặc định page = 1
+    const limit = parseInt(req.query.limit) || 10; // mặc định 10 item / trang
+    const skip = (page - 1) * limit;
+
+    // Đếm tổng số bản ghi
+    const total = await prisma.bestSeller.count();
+
+    // Lấy data theo phân trang
     const bestsellers = await prisma.bestSeller.findMany({
       include: { product: true },
       orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
     });
-    res.json(bestsellers);
+
+    res.json({
+      data: bestsellers,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Lỗi server" });
   }
 });
+
 
 /**
  * POST /bestsellers

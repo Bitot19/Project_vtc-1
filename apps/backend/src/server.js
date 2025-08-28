@@ -7,6 +7,7 @@ import categoryRoutes from "./routes/category.js";
 import orderRoutes from "./routes/orders.js";
 import voucherRoutes from "./routes/voucher.js"; 
 import bestsellersRoutes from "./routes/bestsellers.js"; 
+import dashboardRoutes from "./routes/dashboard.js";
 
 
 dotenv.config();
@@ -25,6 +26,7 @@ app.use("/api/category", categoryRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/voucher",voucherRoutes);
 app.use("/api/bestsellers",bestsellersRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 
 const PORT = process.env.PORT || 5000;
