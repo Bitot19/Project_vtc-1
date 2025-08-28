@@ -5,7 +5,7 @@ export function adminMiddleware(req, res, next) {
   }
 
   if (req.user.role !== "ADMIN") {
-    return res.status(403).json({ error: "Không có quyền truy cập" });
+    return res.status(403).json({ error: "Bạn không có quyền truy cập (Tư cách Admin)" });
   }
 
   next();

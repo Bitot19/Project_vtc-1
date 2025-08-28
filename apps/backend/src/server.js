@@ -5,6 +5,7 @@ import userRoutes from "./routes/user.js"; // chứa route /me
 import productRoutes from "./routes/product.js";
 import categoryRoutes from "./routes/category.js";
 import orderRoutes from "./routes/orders.js";
+import voucherRoutes from "./routes/voucher.js"; // đổi tên
 
 
 dotenv.config();
@@ -21,6 +22,7 @@ app.use("/api/user", userRoutes);   // /me
 app.use("/api/products", productRoutes);
 app.use("/api/category", categoryRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/voucher",voucherRoutes);
 
 
 const PORT = process.env.PORT || 5000;
