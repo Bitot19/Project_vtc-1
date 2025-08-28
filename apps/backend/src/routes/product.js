@@ -62,7 +62,7 @@ router.get("/", async (req, res) => {
       where: filters,
       include: { category: true },
     });
-
+    //
     // Lọc theo tên (bỏ dấu + lowercase) nếu có
     if (name) {
       const keyword = removeVietnameseTones(name.toLowerCase());
