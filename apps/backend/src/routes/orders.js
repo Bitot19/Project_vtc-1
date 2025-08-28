@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, OrderStatus } from "@prisma/client";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { staffMiddleware } from "../middleware/staffMiddleware.js";
 import { adminMiddleware } from "../middleware/adminMiddleware.js";
@@ -67,7 +67,7 @@ router.post("/", authMiddleware, async (req, res) => {
         address,
         note,
         totalPrice,
-        status: "pending",
+       status: OrderStatus.PENDING,
         voucherId: voucher ? voucher.id : null,
         orderItems: { create: orderItemsData },
       },
@@ -113,21 +113,60 @@ router.get("/", authMiddleware, staffMiddleware, async (req, res) => {
   }
 });
 
-// ===== ADMIN hoặc STAFF: Cập nhật trạng thái đơn hàng =====
+// ===== STAFF hoặc ADMIN: Cập nhật trạng thái đơn hàng =====
 router.put("/:id/status", authMiddleware, staffMiddleware, async (req, res) => {
   try {
-    const { status } = req.body; // pending, paid, shipped, cancelled
-    const order = await prisma.order.update({
-      where: { id: Number(req.params.id) },
+   const { status } = req.body;
+
+// Kiểm tra hợp lệ
+if (!Object.values(OrderStatus).includes(status)) {
+  return res.status(400).json({ error: "Trạng thái không hợp lệ" });
+}
+    const orderId = Number(req.params.id);
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: { include: { product: true } } },
+    });
+
+    if (!order) return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
+
+    // Nếu từ pending -> paid => trừ kho
+    if (status === OrderStatus.PAID && order.status === OrderStatus.PENDING)  {
+      for (const item of order.orderItems) {
+        if (item.product.quantity < item.quantity) {
+          return res.status(400).json({ error: `Sản phẩm ${item.product.name} không đủ hàng` });
+        }
+        await prisma.product.update({
+          where: { id: item.productId },
+          data: { quantity: { decrement: item.quantity } },
+        });
+      }
+    }
+
+    // Nếu từ paid -> cancelled => trả kho
+    if (status === OrderStatus.CANCELLED && order.status === OrderStatus.PAID) {
+      for (const item of order.orderItems) {
+        await prisma.product.update({
+          where: { id: item.productId },
+          data: { quantity: { increment: item.quantity } },
+        });
+      }
+    }
+
+    // Cập nhật trạng thái đơn hàng
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
       data: { status },
     });
 
-    res.json({ message: "Cập nhật trạng thái thành công", order });
+    res.json({ message: "Cập nhật trạng thái thành công", order: updatedOrder });
   } catch (err) {
     console.error("Lỗi cập nhật status:", err);
     res.status(500).json({ error: "Lỗi server" });
   }
 });
+
 
 // ===== Xoá đơn hàng (ADMIN, STAFF hoặc chủ đơn khi pending) =====
 router.delete("/:id", authMiddleware, async (req, res) => {
@@ -142,7 +181,7 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
 
     const isOwner = order.userId === req.user.id;
-    const isPending = order.status === "pending";
+    const isPending = order.status === OrderStatus.PENDING;
 
     if (!(req.user.role === "ADMIN" || req.user.role === "STAFF" || (isOwner && isPending))) {
       return res.status(403).json({ error: "Bạn không có quyền xoá đơn này" });
@@ -173,7 +212,7 @@ router.put("/:orderId/orderItems/:itemId", authMiddleware, async (req, res) => {
     if (!order) return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
 
     const isOwner = order.userId === req.user.id;
-    const isPending = order.status === "pending";
+    const isPending = order.status === OrderStatus.PENDING;
 
     if (!(req.user.role === "ADMIN" || req.user.role === "STAFF" || (isOwner && isPending))) {
       return res.status(403).json({ error: "Bạn không có quyền sửa đơn này" });
@@ -224,6 +263,123 @@ router.put("/:orderId/orderItems/:itemId", authMiddleware, async (req, res) => {
     res.status(500).json({ error: "Lỗi server" });
   }
 });
+// ===== Thêm item vào đơn hàng =====
+router.post("/:orderId/orderItems", authMiddleware, async (req, res) => {
+  try {
+    const orderId = Number(req.params.orderId);
+    const { productId, quantity } = req.body;
+
+    if (!productId || !quantity || quantity <= 0) {
+      return res.status(400).json({ error: "Thiếu productId hoặc quantity không hợp lệ" });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true },
+    });
+
+    if (!order) return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
+
+    const isOwner = order.userId === req.user.id;
+    const isPending = order.status === OrderStatus.PENDING;
+
+    if (!(req.user.role === "ADMIN" || req.user.role === "STAFF" || (isOwner && isPending))) {
+      return res.status(403).json({ error: "Bạn không có quyền thêm item vào đơn này" });
+    }
+
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) return res.status(400).json({ error: "Sản phẩm không tồn tại" });
+
+    // Tạo orderItem mới
+    const newItem = await prisma.orderItem.create({
+      data: {
+        orderId,
+        productId,
+        quantity,
+        price: product.price,
+      },
+    });
+
+    // Tính lại totalPrice
+    const orderItems = await prisma.orderItem.findMany({
+      where: { orderId },
+      include: { product: true },
+    });
+
+    let newTotalPrice = orderItems.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
+
+    if (order.voucherId) {
+      const voucher = await prisma.voucher.findUnique({ where: { id: order.voucherId } });
+      if (voucher && voucher.isActive) {
+        newTotalPrice = Math.max(0, newTotalPrice - voucher.discount);
+      }
+    }
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { totalPrice: newTotalPrice },
+    });
+
+    res.status(201).json({ message: "Thêm item thành công", item: newItem, newTotalPrice });
+  } catch (err) {
+    console.error("Lỗi thêm item:", err);
+    res.status(500).json({ error: "Lỗi server" });
+  }
+});
+
+
+// ===== Xoá item khỏi đơn hàng =====
+router.delete("/:orderId/orderItems/:itemId", authMiddleware, async (req, res) => {
+  try {
+    const orderId = Number(req.params.orderId);
+    const itemId = Number(req.params.itemId);
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { orderItems: true },
+    });
+
+    if (!order) return res.status(404).json({ error: "Không tìm thấy đơn hàng" });
+
+    const isOwner = order.userId === req.user.id;
+    const isPending = order.status === OrderStatus.PENDING;
+
+    if (!(req.user.role === "ADMIN" || req.user.role === "STAFF" || (isOwner && isPending))) {
+      return res.status(403).json({ error: "Bạn không có quyền xoá item trong đơn này" });
+    }
+
+    const orderItem = order.orderItems.find((i) => i.id === itemId);
+    if (!orderItem) return res.status(404).json({ error: "Không tìm thấy item trong đơn hàng" });
+
+    await prisma.orderItem.delete({ where: { id: itemId } });
+
+    // Tính lại totalPrice
+    const orderItems = await prisma.orderItem.findMany({
+      where: { orderId },
+      include: { product: true },
+    });
+
+    let newTotalPrice = orderItems.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
+
+    if (order.voucherId) {
+      const voucher = await prisma.voucher.findUnique({ where: { id: order.voucherId } });
+      if (voucher && voucher.isActive) {
+        newTotalPrice = Math.max(0, newTotalPrice - voucher.discount);
+      }
+    }
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { totalPrice: newTotalPrice },
+    });
+
+    res.json({ message: "Xoá item thành công", newTotalPrice });
+  } catch (err) {
+    console.error("Lỗi xoá item:", err);
+    res.status(500).json({ error: "Lỗi server" });
+  }
+});
+
 
 export default router;
 
