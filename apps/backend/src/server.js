@@ -1,11 +1,12 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import userRoutes from "./routes/user.js"; // chứa route /me
+import userRoutes from "./routes/user.js"; 
 import productRoutes from "./routes/product.js";
 import categoryRoutes from "./routes/category.js";
 import orderRoutes from "./routes/orders.js";
-import voucherRoutes from "./routes/voucher.js"; // đổi tên
+import voucherRoutes from "./routes/voucher.js"; 
+import bestsellersRoutes from "./routes/bestsellers.js"; 
 
 
 dotenv.config();
@@ -23,6 +24,7 @@ app.use("/api/products", productRoutes);
 app.use("/api/category", categoryRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/voucher",voucherRoutes);
+app.use("/api/bestsellers",bestsellersRoutes);
 
 
 const PORT = process.env.PORT || 5000;

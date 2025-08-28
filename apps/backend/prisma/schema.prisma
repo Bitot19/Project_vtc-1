@@ -45,7 +45,8 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  orderItems OrderItem[] // 👈 cần field này để đối xứng với OrderItem.product
+  orderItems OrderItem[]
+  bestSeller BestSeller?
 }
 
 model Order {
@@ -77,6 +78,13 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id]) // đối xứng với Product.orderItems
   quantity  Int
   price     Float
+}
+
+model BestSeller {
+  id        Int      @id @default(autoincrement())
+  productId Int      @unique
+  product   Product  @relation(fields: [productId], references: [id])
+  createdAt DateTime @default(now())
 }
 
 model Voucher {
