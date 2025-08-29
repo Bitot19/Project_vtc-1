@@ -379,6 +379,25 @@ router.delete("/:orderId/orderItems/:itemId", authMiddleware, async (req, res) =
     res.status(500).json({ error: "Lỗi server" });
   }
 });
+// Khách hàng xem lịch sử mua hàng
+router.get("/me/orders", authMiddleware, async (req, res) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: { userId: req.user.id },
+      include: {
+        orderItems: { include: { product: true } },
+        voucher: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    res.json({ orders });
+  } catch (err) {
+    console.error("Lỗi lấy lịch sử mua hàng:", err);
+    res.status(500).json({ error: "Lỗi server" });
+  }
+});
+
 
 
 export default router;
