@@ -33,20 +33,34 @@ model Category {
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
+  id          Int              @id @default(autoincrement())
   name        String
   description String?
-  image       String?
-  size        String?
-  quantity    Int
-  price       Float
+  image       String?          // ảnh mặc định của sản phẩm
   categoryId  Int
-  category    Category @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  category    Category         @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  variants    ProductVariant[] // Quan hệ 1-nhiều với biến thể
+  bestSeller  BestSeller?
+}
+
+model ProductVariant {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+
+  size      String?
+  color     String?
+  price     Float
+  quantity  Int
+  image     String?   // ảnh riêng của biến thể nếu cần
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   orderItems OrderItem[]
-  bestSeller BestSeller?
 }
 
 enum OrderStatus {
@@ -77,13 +91,15 @@ model Order {
 }
 
 model OrderItem {
-  id        Int     @id @default(autoincrement())
-  orderId   Int
-  order     Order   @relation(fields: [orderId], references: [id]) // đối xứng với Order.orderItems
-  productId Int
-  product   Product @relation(fields: [productId], references: [id]) // đối xứng với Product.orderItems
+  id             Int            @id @default(autoincrement())
+  orderId        Int
+  order          Order          @relation(fields: [orderId], references: [id]) 
+
+  productVariantId Int
+  productVariant   ProductVariant @relation(fields: [productVariantId], references: [id])
+
   quantity  Int
-  price     Float
+  price     Float   // giá tại thời điểm mua (để không bị thay đổi khi variant update)
 }
 
 model BestSeller {

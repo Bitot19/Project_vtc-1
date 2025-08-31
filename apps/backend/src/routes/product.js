@@ -16,31 +16,34 @@ const removeVietnameseTones = (str) => {
     .replace(/Đ/g, "D");
 };
 
-/* ===== Tạo sản phẩm ===== */
+/* ===== Tạo sản phẩm + biến thể ===== */
 router.post("/", authMiddleware, staffMiddleware, async (req, res) => {
   try {
-    const { name, description, image, size, price, quantity, categoryId, categoryName } = req.body;
+    const { name, description, image, categoryId, categoryName, variants } = req.body;
+    // variants = [{ size, color, price, quantity, image }, ...]
 
     let categoryConnect;
-    if (categoryId) {
-      categoryConnect = { connect: { id: parseInt(categoryId) } };
-    } else if (categoryName) {
-      categoryConnect = { create: { name: categoryName } };
-    } else {
-      return res.status(400).json({ error: "Cần cung cấp categoryId hoặc categoryName" });
-    }
+    if (categoryId) categoryConnect = { connect: { id: parseInt(categoryId) } };
+    else if (categoryName) categoryConnect = { create: { name: categoryName } };
+    else return res.status(400).json({ error: "Cần cung cấp categoryId hoặc categoryName" });
 
     const product = await prisma.product.create({
       data: {
         name,
         description,
         image,
-        size,
-        price,
-        quantity,
         category: categoryConnect,
+        variants: {
+          create: variants.map(v => ({
+            size: v.size,
+            color: v.color,
+            price: v.price,
+            quantity: v.quantity,
+            image: v.image,
+          })),
+        },
       },
-      include: { category: true },
+      include: { category: true, variants: true },
     });
 
     res.status(201).json({ product });
@@ -50,23 +53,21 @@ router.post("/", authMiddleware, staffMiddleware, async (req, res) => {
   }
 });
 
-/* ===== Lấy danh sách sản phẩm ===== */
+/* ===== Lấy danh sách sản phẩm (có variants) ===== */
 router.get("/", async (req, res) => {
   try {
     const { name, categoryId } = req.query;
-
     const filters = {};
     if (categoryId) filters.categoryId = Number(categoryId);
 
     let products = await prisma.product.findMany({
       where: filters,
-      include: { category: true },
+      include: { category: true, variants: true },
     });
-    //
-    // Lọc theo tên (bỏ dấu + lowercase) nếu có
+
     if (name) {
       const keyword = removeVietnameseTones(name.toLowerCase());
-      products = products.filter((p) =>
+      products = products.filter(p =>
         removeVietnameseTones(p.name.toLowerCase()).includes(keyword)
       );
     }
@@ -78,7 +79,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-/* ===== Tìm kiếm sản phẩm theo tên (có dấu/không dấu) + lọc danh mục ===== */
+/* ===== Tìm kiếm sản phẩm ===== */
 router.get("/search", async (req, res) => {
   try {
     const { q, categoryId } = req.query;
@@ -87,12 +88,12 @@ router.get("/search", async (req, res) => {
 
     let products = await prisma.product.findMany({
       where: filters,
-      include: { category: true },
+      include: { category: true, variants: true },
     });
 
     if (q) {
       const qNoAccent = removeVietnameseTones(q.toLowerCase());
-      products = products.filter((p) =>
+      products = products.filter(p =>
         removeVietnameseTones(p.name.toLowerCase()).includes(qNoAccent)
       );
     }
@@ -104,7 +105,7 @@ router.get("/search", async (req, res) => {
   }
 });
 
-/* ===== Đọc sản phẩm duy nhất ===== */
+/* ===== Lấy 1 sản phẩm ===== */
 router.get("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -112,7 +113,7 @@ router.get("/:id", async (req, res) => {
 
     const product = await prisma.product.findUnique({
       where: { id },
-      include: { category: true },
+      include: { category: true, variants: true },
     });
 
     if (!product) return res.status(404).json({ error: "Không tìm thấy sản phẩm" });
@@ -124,30 +125,40 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-/* ===== Cập nhật sản phẩm ===== */
+/* ===== Cập nhật sản phẩm + variants ===== */
 router.put("/:id", authMiddleware, staffMiddleware, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: "ID không hợp lệ" });
 
-    const { name, description, image, size, price, quantity, categoryId, categoryName } = req.body;
+    const { name, description, image, categoryId, categoryName, variants } = req.body;
 
     let categoryConnect;
     if (categoryId) categoryConnect = { connect: { id: parseInt(categoryId) } };
     else if (categoryName) categoryConnect = { create: { name: categoryName } };
 
+    // Cập nhật product và replace variants
     const product = await prisma.product.update({
       where: { id },
       data: {
         name,
         description,
         image,
-        size,
-        price,
-        quantity,
         ...(categoryConnect && { category: categoryConnect }),
+        variants: variants
+          ? {
+              deleteMany: {}, // xóa hết variant cũ
+              create: variants.map(v => ({
+                size: v.size,
+                color: v.color,
+                price: v.price,
+                quantity: v.quantity,
+                image: v.image,
+              })),
+            }
+          : undefined,
       },
-      include: { category: true },
+      include: { category: true, variants: true },
     });
 
     res.json({ product });
@@ -172,6 +183,7 @@ router.delete("/:id", authMiddleware, adminMiddleware, async (req, res) => {
 });
 
 export default router;
+
 
 
 /*
